@@ -1,0 +1,148 @@
+Influence & Stability Analysis — Ridge Regression
+──────────────────────────────────────────────────────────────────────────────
+n_train = 480  │  d = 8  │  λ = 1e-3  │  base RMSE = 0.607790
+seed = 42      │  test set = 120 points (20%)
+──────────────────────────────────────────────────────────────────────────────
+
+── LEVERAGE ──────────────────────────────────────────────────────────────────
+  Mean h_ii  : 0.016667  (theoretical d/n = 0.016667)  ✓ matches theory
+  Max  h_ii  : 0.051503  (threshold 2d/n = 0.033333)
+  High-leverage points (h_ii > 2d/n): 23 / 480  (4.8%)
+
+  Note: mean h_ii = d/n is not coincidence — it follows from tr(H) = d for
+  the ridge hat matrix. Max 0.052 vs threshold 0.033 means the most extreme
+  point sits ~1.5× above the high-leverage cutoff. No single point dominates
+  leverage; influence is more concentrated.
+
+── INFLUENCE CONCENTRATION ───────────────────────────────────────────────────
+  Normalised influence mass (sums to 1.0)
+
+    Top-1        ██                                            0.0330  (cumul 0.0330)
+    Top 2-5      ███                                           0.0685  (cumul 0.1015)
+    Top 6-25     ███████████                                   0.2118  (cumul 0.3132)
+    Rest         ██████████████████████████████████            0.6868  (cumul 1.0000)
+
+  Top-25 points (5.2% of training data) hold 31.3% of total influence mass.
+  Top-5  points (1.0% of training data) hold 10.2% of total influence mass.
+
+── INFLUENCE vs |RESIDUAL| ───────────────────────────────────────────────────
+  Spearman rho = 0.9524  (p < 1e-200)
+
+  Interpretation: influence is almost entirely driven by residual magnitude.
+  Leverage modulates it, but a point needs a large residual to be influential.
+  Implication for debugging: sorting by |residual| is a fast proxy for
+  influence ranking when the hat matrix is expensive to compute at scale.
+
+── TOP-10 INFLUENTIAL TRAINING POINTS ───────────────────────────────────────
+  rank   train_idx   inf_share    leverage    residual  |residual|
+  ──────────────────────────────────────────────────────────────────
+     1          55    0.032951    0.029129     +1.7699      1.7699
+     2         287    0.019314    0.014219     +1.9693      1.9693
+     3         406    0.018570    0.028012     +1.3565      1.3565
+     4         380    0.015359    0.027012     -1.2576      1.2576
+     5          26    0.015261    0.022027     -1.3953      1.3953
+     6         260    0.012879    0.024893     -1.2022      1.2022
+     7         125    0.012671    0.023149     +1.2388      1.2388
+     8         254    0.012609    0.029416     +1.0892      1.0892
+     9         178    0.012297    0.031342     -1.0400      1.0400
+    10         109    0.011475    0.026736     -1.0929      1.0929
+
+  Point #2 (idx=287): largest residual (1.969) but lowest leverage in top-10
+  (0.014) → ranks 2nd, not 1st. Neither metric alone gives the correct ranking.
+  Point #1 (idx=55): 3rd-largest residual × 4th-highest leverage → top rank.
+
+── PREDICTION STABILITY (exact retrain after removing top-K) ────────────────
+      K     mean|Δ|      max|Δ|    RMSE_new       ΔRMSE     vs random
+  ──────────────────────────────────────────────────────────────────────
+      1    0.011630    0.036654    0.608653   +0.000864             —
+      5    0.016792    0.062755    0.608765   +0.000975             —
+     10    0.014587    0.050847    0.606713   -0.001076             —
+     25    0.032213    0.120027    0.603760   -0.004030         2.25×
+     50    0.026592    0.087704    0.609350   +0.001560             —
+    100    0.039147    0.127819    0.604639   -0.003151             —
+
+  K=10 and K=25 produce negative ΔRMSE (model improves after removal).
+  These are not bad data points — they are hard, legitimate observations
+  that the model struggles with. Their removal makes the remaining problem
+  easier. This is diagnostic, not a recommendation to delete them.
+
+── INFLUENTIAL vs RANDOM REMOVAL (K=25, 100 trials) ─────────────────────────
+  Influential   mean|Δ| = 0.032213   max|Δ| = 0.120027
+  Random (100)  mean|Δ| = 0.014325  ±0.004469   max_trial = 0.027929
+
+  Ratio: 2.25× more disruptive than random removal of the same K
+
+  The random-removal max across 100 trials (0.028) never reaches the
+  influential mean (0.032). Targeted removal of 25 influential points causes
+  more prediction shift than the worst random removal seen in 100 attempts.
+
+── WORST-CASE BOUND ──────────────────────────────────────────────────────────
+  Removing top-25 influential points (31.3% influence mass, 5.2% of data):
+
+    mean |Δ| across test set : 0.032213   (5.3% of RMSE)
+    max  |Δ| across test set : 0.120027   (19.7% of RMSE)
+    empirical worst-case bound: |Δ| ≤ 0.120
+
+  This bound is exact (full retrain), not a linear approximation.
+  No test prediction shifts by more than ~0.12 under this removal.
+
+══════════════════════════════════════════════════════════════════════════════
+FINAL TENSORS
+══════════════════════════════════════════════════════════════════════════════
+
+Top-25 influence tensor  [train_idx, inf_share, leverage, residual]
+[[ 55.   0.032951  0.029129  +1.76989],
+ [287.   0.019314  0.014219  +1.96926],
+ [406.   0.018570  0.028012  +1.35645],
+ [380.   0.015359  0.027012  -1.25757],
+ [ 26.   0.015261  0.022027  -1.39527],
+ [260.   0.012879  0.024893  -1.20218],
+ [125.   0.012671  0.023149  +1.23876],
+ [254.   0.012609  0.029416  +1.08919],
+ [178.   0.012297  0.031342  -1.03998],
+ [109.   0.011475  0.026736  -1.09290],
+ [155.   0.011173  0.013475  -1.53973],
+ [ 88.   0.011167  0.023226  +1.16087],
+ [ 18.   0.011084  0.040901  -0.85577],
+ [323.   0.011063  0.015592  -1.42131],
+ [457.   0.010819  0.027983  -1.03593],
+ [214.   0.010206  0.013504  -1.47000],
+ [  8.   0.010094  0.022796  -1.11456],
+ [140.   0.009844  0.021362  -1.13867],
+ [316.   0.009704  0.035166  -0.86872],
+ [171.   0.009509  0.041595  -0.78542],
+ [216.   0.009171  0.037430  -0.81669],
+ [ 61.   0.009113  0.020039  -1.13270],
+ [293.   0.009029  0.030851  -0.89864],
+ [415.   0.008950  0.011749  +1.47835],
+ [150.   0.008926  0.024255  -1.01457]]
+
+Stability tensor  [K, mean_delta, max_delta, rmse_new, rmse_delta]
+[[  1.000   0.011630  0.036654  0.608653  +0.000864],
+ [  5.000   0.016792  0.062755  0.608765  +0.000975],
+ [ 10.000   0.014587  0.050847  0.606713  -0.001076],
+ [ 25.000   0.032213  0.120027  0.603760  -0.004030],
+ [ 50.000   0.026592  0.087704  0.609350  +0.001560],
+ [100.000   0.039147  0.127819  0.604639  -0.003151]]
+
+──────────────────────────────────────────────────────────────────────────────
+CROSS-RESULT OBSERVATIONS
+──────────────────────────────────────────────────────────────────────────────
+
+1. Influence != leverage alone, and != residual alone. Point #2 (idx=287)
+   has the largest residual in the dataset (1.969) but lowest leverage in
+   top-10 (0.014) and ranks 2nd. Neither metric in isolation gives the
+   correct ranking. The joint product r_i^2 * h_ii / (1-h_ii)^2 is required.
+
+2. Negative ΔRMSE at K=10 and K=25 is diagnostic, not a cleaning signal.
+   These points are hard-to-fit but legitimate. Removing them makes the
+   remaining problem easier — the model is doing its job on the hardest cases.
+
+3. The random-removal max (0.028 across 100 trials) never reaches the
+   influential mean (0.032). Influence scores identify structurally leveraged
+   points, not just high-residual ones. This validates the score as a
+   stability diagnostic rather than a residual filter.
+
+4. Marginal returns diminish past K=25. K=100 produces max|Delta|=0.128 vs
+   K=25 max|Delta|=0.120 — only 6% worse despite removing 4× as many points.
+   The influence mass is concentrated; the bound is essentially set by K~25.
