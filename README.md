@@ -13,8 +13,6 @@ A closed-form influence analysis for ridge regression that:
 3. **Bounds** the worst-case prediction change: |Δ| ≤ 0.120 after removing top-25
 4. **Validates** that influential removal is 2.25× more disruptive than removing random points of the same count
 
-Part of a series on measurable reliability in ML. See also: [Split Conformal Prediction](https://gist.github.com/mariam-elelidy/9257762ee0e8e8df2ba6cdb5908076fd) and [Assumption Stress Harness].
-
 ---
 
 ## Core result (n=600, d=8, seed=42)
